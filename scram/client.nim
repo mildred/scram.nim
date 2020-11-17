@@ -45,14 +45,16 @@ proc prepareFirstMessage*(s: ScramClient, username: string): string {.raises: [S
   s.state = FIRST_PREPARED
   GS2_HEADER & s.clientFirstMessageBare
 
-proc prepareFinalMessage*[T](s: ScramClient[T], password, serverFirstMessage: string): string =
+proc prepareFinalMessage*[T](s: ScramClient[T], password, serverFirstMessage: string): string {.gcsafe.} =
   if s.state != FIRST_PREPARED:
     raise newException(ScramError, "First message have not been prepared, call prepareFirstMessage() first")
   var
     nonce, salt: string
     iterations: int
   var matches: array[3, string]
-  if match(serverFirstMessage, SERVER_FIRST_MESSAGE, matches):
+  {.cast(gcsafe).}:
+    let m = match(serverFirstMessage, SERVER_FIRST_MESSAGE, matches)
+  if m:
     nonce = matches[0]
     salt = base64.decode(matches[1])
     iterations = parseInt(matches[2])
@@ -83,12 +85,14 @@ proc prepareFinalMessage*[T](s: ScramClient[T], password, serverFirstMessage: st
   else:
     clientFinalMessageWithoutProof & ",p=" & base64.encode(clientProof, newLine="")
 
-proc verifyServerFinalMessage*(s: ScramClient, serverFinalMessage: string): bool =
+proc verifyServerFinalMessage*(s: ScramClient, serverFinalMessage: string): bool {.gcsafe.} =
   if s.state != FINAL_PREPARED:
     raise newException(ScramError, "You can call this method only once after calling prepareFinalMessage()")
   s.state = ENDED
   var matches: array[1, string]
-  if match(serverFinalMessage, SERVER_FINAL_MESSAGE, matches):
+  {.cast(gcsafe).}:
+    let m = match(serverFinalMessage, SERVER_FINAL_MESSAGE, matches)
+  if m:
     let proposedServerSignature = base64.decode(matches[0])
     s.isSuccessful = proposedServerSignature == $%s.serverSignature
   s.isSuccessful
